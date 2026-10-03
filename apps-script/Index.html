@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<base target="_blank">
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1c1f24; --muted: #6b7280; --line: #e2e5ea;
+    --accent: #0b6e4f; --accent-text: #ffffff; --in: #0b7a43; --out: #b3261e;
+    --ok-bg: #dcf3e4; --ok-text: #0a5a31; --ko-bg: #fbe0de; --ko-text: #8c1d18;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121417; --card: #1c1f24; --text: #eceef1; --muted: #9aa1ac; --line: #2c3037;
+      --accent: #37b48a; --accent-text: #06231a; --in: #5fd39a; --out: #ff8a80;
+      --ok-bg: #123524; --ok-text: #a9eac6; --ko-bg: #46201d; --ko-text: #ffc9c4;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  main { padding: 16px 16px 88px; max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 4px 0 16px; }
+  .view[hidden] { display: none; }
+
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input[type=text], input[type=date], input[type=search], select {
+    width: 100%; height: 48px; padding: 0 12px; font: inherit; color: var(--text);
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .amount { position: relative; }
+  .amount input { padding-right: 36px; font-variant-numeric: tabular-nums; }
+  .amount span { position: absolute; right: 14px; top: 12px; color: var(--muted); }
+  .check { display: flex; align-items: center; gap: 12px; margin-top: 18px; min-height: 48px; color: var(--text); font-size: 16px; }
+  .check input { width: 24px; height: 24px; accent-color: var(--accent); }
+
+  button { font: inherit; border: 0; border-radius: 10px; min-height: 48px; padding: 0 16px; cursor: pointer; }
+  button:disabled { opacity: .55; }
+  .primary { background: var(--accent); color: var(--accent-text); font-weight: 600; width: 100%; margin-top: 20px; }
+  .ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .danger { background: transparent; color: var(--out); border: 1px solid var(--out); }
+  .danger.armed { background: var(--out); color: var(--card); }
+
+  .msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: 15px; }
+  .msg:empty { display: none; }
+  .msg.ok { background: var(--ok-bg); color: var(--ok-text); }
+  .msg.ko { background: var(--ko-bg); color: var(--ko-text); }
+  .msg.info { background: var(--card); color: var(--muted); border: 1px solid var(--line); }
+
+  .toolbar { display: flex; gap: 8px; align-items: center; }
+  .toolbar input { flex: 1; min-width: 0; }
+  .count { font-size: 13px; color: var(--muted); margin: 10px 2px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .item {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; width: 100%; text-align: left;
+    background: var(--card); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; min-height: 56px;
+  }
+  .item .d { overflow-wrap: anywhere; }
+  .item .a { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .item .a.in { color: var(--in); } .item .a.out { color: var(--out); }
+  .item .m { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+  .more { width: 100%; }
+
+  .charts img { display: block; width: 100%; height: auto; background: #fff; border-radius: 10px; margin-bottom: 12px; border: 1px solid var(--line); }
+  /* Grafici e tabella arrivano dal foglio con sfondo bianco: in tema scuro li inverto
+     (hue-rotate riporta i colori alla tinta originale dopo l'inversione). */
+  @media (prefers-color-scheme: dark) {
+    .charts img, .sheet { filter: invert(.9) hue-rotate(180deg); }
+  }
+  .sheet { overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .sheet { touch-action: pan-x pan-y; }   /* il pizzico è gestito dall'app, non dal browser */
+  .zoombar { display: flex; gap: 8px; margin-top: 12px; }
+  .zoombar[hidden] { display: none; }
+  .zoombar button { min-width: 48px; }
+  .zoombar .fit { margin-left: auto; }
+  .sheet table { border-collapse: collapse; font-size: 12px; color: #111; }
+  .sheet td { border: 1px solid #e3e3e3; padding: 4px 6px; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+  .sheet td.t { text-align: left; }
+  .sheet td.b { font-weight: 700; }
+  .sheet td:first-child { position: sticky; left: 0; background: #fff; text-align: left; }
+  .linkrow { margin: 12px 0; }
+  .linkrow a { color: var(--accent); }
+
+  nav[hidden] { display: none; }
+  nav {
+    position: fixed; left: 0; right: 0; bottom: 0; display: flex;
+    background: var(--card); border-top: 1px solid var(--line);
+  }
+  nav button { flex: 1; background: transparent; color: var(--muted); border-radius: 0; min-height: 60px; font-size: 14px; }
+  nav button[aria-selected=true] { color: var(--accent); font-weight: 700; box-shadow: inset 0 3px 0 var(--accent); }
+
+  dialog { border: 0; border-radius: 14px; padding: 16px; width: min(92vw, 520px); background: var(--bg); color: var(--text); }
+  dialog::backdrop { background: rgba(0, 0, 0, .5); }
+  dialog h2 { font-size: 18px; margin: 0 0 4px; }
+  .actions { display: flex; gap: 8px; margin-top: 20px; }
+  .actions button { flex: 1; }
+  .actions .primary { margin-top: 0; }
+</style>
+</head>
+<body>
+<main>
+  <section id="view-lock" class="view" hidden>
+    <h1>CashFlow</h1>
+    <form id="form-lock" novalidate>
+      <label for="lock-code">Codice di accesso</label>
+      <input id="lock-code" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" required>
+      <button class="primary" type="submit">Entra</button>
+    </form>
+    <div id="msg-lock" class="msg" role="status" aria-live="polite"></div>
+  </section>
+
+  <section id="view-new" class="view">
+    <h1>Nuovo movimento</h1>
+    <form id="form-new" novalidate></form>
+    <div id="msg-new" class="msg" role="status" aria-live="polite"></div>
+  </section>
+
+  <section id="view-db" class="view" hidden>
+    <h1>DB</h1>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Cerca…" aria-label="Cerca">
+      <button id="reload-db" class="ghost" type="button">Aggiorna</button>
+    </div>
+    <div id="msg-db" class="msg" role="status" aria-live="polite"></div>
+    <div id="count" class="count"></div>
+    <ul id="list" class="list"></ul>
+    <button id="more" class="ghost more" type="button" hidden>Mostra altri</button>
+  </section>
+
+  <section id="view-charts" class="view" hidden>
+    <h1>Charts</h1>
+    <div class="toolbar">
+      <button id="reload-charts" class="ghost" type="button">Aggiorna</button>
+    </div>
+    <div id="msg-charts" class="msg" role="status" aria-live="polite"></div>
+    <div id="zoombar" class="zoombar" hidden>
+      <button id="zoom-out" class="ghost" type="button" aria-label="Riduci tabella">−</button>
+      <button id="zoom-in" class="ghost" type="button" aria-label="Ingrandisci tabella">+</button>
+      <button id="zoom-fit" class="ghost fit" type="button">Adatta</button>
+    </div>
+    <div id="sheet" class="sheet" style="margin-top:8px" hidden></div>
+    <div id="charts" class="charts" style="margin-top:12px"></div>
+    <p class="linkrow"><a id="open-sheet" href="#" rel="noopener">Apri il foglio originale nel browser</a></p>
+  </section>
+</main>
+
+<nav role="tablist">
+  <button role="tab" data-view="new" aria-selected="true">Nuovo</button>
+  <button role="tab" data-view="db" aria-selected="false">DB</button>
+  <button role="tab" data-view="charts" aria-selected="false">Charts</button>
+</nav>
+
+<dialog id="edit">
+  <h2>Modifica movimento</h2>
+  <form id="form-edit" novalidate></form>
+  <div id="msg-edit" class="msg" role="status" aria-live="polite"></div>
+  <div class="actions">
+    <button id="edit-delete" class="danger" type="button">Elimina</button>
+    <button id="edit-cancel" class="ghost" type="button">Annulla</button>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+
+  var PAGE = 150;
+  var state = {
+    groups: [], income: {}, today: '',
+    rows: [], shown: PAGE,
+    dbFresh: false, chartsFresh: false,   // false = da ricaricare alla prossima apertura della scheda
+    editing: null,
+    code: '', started: false
+  };
+  var CODE_KEY = 'cashflow-access-code';
+  function loadCode() { try { return localStorage.getItem(CODE_KEY) || ''; } catch (e) { return ''; } }
+  function saveCode(v) { try { v ? localStorage.setItem(CODE_KEY, v) : localStorage.removeItem(CODE_KEY); } catch (e) { /* senza storage il codice va reinserito a ogni avvio */ } }
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------- Chiamate al server ---------- */
+  function call(name) {
+    var args = [state.code].concat(Array.prototype.slice.call(arguments, 1));
+    return new Promise(function (resolve, reject) {
+      var runner = google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function (err) {
+          var text = cleanError(err);
+          if (text.indexOf('ACCESSO_NEGATO') >= 0) {
+            // Codice mancante, errato o rigenerato: lo richiedo di nuovo.
+            text = 'Codice di accesso non valido.';
+            saveCode(''); state.code = '';
+            showLock(text);
+          }
+          reject(new Error(text));
+        });
+      runner[name].apply(runner, args);
+    });
+  }
+  function cleanError(err) {
+    var text = (err && err.message) || String(err) || 'Errore sconosciuto';
+    return text.replace(/^(Exception|Error):\s*/, '');
+  }
+  function setMsg(id, kind, text) {
+    var el = $(id);
+    el.className = 'msg' + (kind ? ' ' + kind : '');
+    el.textContent = text || '';
+  }
+
+  /* ---------- Form (usato sia per inserimento sia per modifica) ---------- */
+  function buildForm(form, prefix, submitLabel) {
+    form.innerHTML =
+      '<label for="' + prefix + 'desc">Descrizione</label>' +
+      '<input id="' + prefix + 'desc" type="text" maxlength="200" autocomplete="off" autocapitalize="none" required>' +
+      '<label for="' + prefix + 'cat">Categoria</label>' +
+      '<select id="' + prefix + 'cat" required></select>' +
+      '<label for="' + prefix + 'amount">Importo</label>' +
+      '<div class="amount"><input id="' + prefix + 'amount" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" required><span>€</span></div>' +
+      '<label for="' + prefix + 'date">Data</label>' +
+      '<input id="' + prefix + 'date" type="date" required>' +
+      '<label class="check"><input id="' + prefix + 'imp" type="checkbox"> Importante</label>' +
+      '<button class="primary" type="submit">' + submitLabel + '</button>';
+
+    var select = $(prefix + 'cat');
+    var first = document.createElement('option');
+    first.value = ''; first.textContent = 'Seleziona…';
+    select.appendChild(first);
+    state.groups.forEach(function (g) {
+      var parent = select;
+      if (g.label) {
+        parent = document.createElement('optgroup');
+        parent.label = g.label;
+        select.appendChild(parent);
+      }
+      g.items.forEach(function (name) {
+        var o = document.createElement('option');
+        o.value = name; o.textContent = name;
+        parent.appendChild(o);
+      });
+    });
+
+    // Alcune tastiere Android propongono solo il punto: lo converto in virgola.
+    $(prefix + 'amount').addEventListener('input', function () {
+      var clean = this.value.replace(/\./g, ',').replace(/[^\d,]/g, '');
+      if (clean !== this.value) this.value = clean;
+    });
+  }
+
+  function readForm(prefix) {
+    var desc = $(prefix + 'desc').value.trim();
+    var cat = $(prefix + 'cat').value;
+    var amount = $(prefix + 'amount').value.trim();
+    var date = $(prefix + 'date').value;
+    if (!desc) return { error: 'Inserisci una descrizione.', focus: 'desc' };
+    if (!cat) return { error: 'Seleziona una categoria.', focus: 'cat' };
+    if (!/^\d{1,9}(,\d{1,2})?$/.test(amount) || Number(amount.replace(',', '.')) <= 0) {
+      return { error: 'Importo non valido: usa il formato 12,50.', focus: 'amount' };
+    }
+    if (!date) return { error: 'Seleziona una data.', focus: 'date' };
+    return { data: { desc: desc, cat: cat, amount: amount.replace(',', '.'), date: date, imp: $(prefix + 'imp').checked } };
+  }
+
+  function setBusy(form, busy) {
+    Array.prototype.forEach.call(form.querySelectorAll('input,select,button'), function (el) { el.disabled = busy; });
+  }
+
+  function resetNewForm() {
+    $('n-desc').value = ''; $('n-cat').value = ''; $('n-amount').value = '';
+    $('n-date').value = state.today; $('n-imp').checked = false;
+  }
+
+  /* ---------- Inserimento ---------- */
+  function onSubmitNew(ev) {
+    ev.preventDefault();
+    var form = $('form-new');
+    var res = readForm('n-');
+    if (res.error) { setMsg('msg-new', 'ko', 'KO – ' + res.error); $('n-' + res.focus).focus(); return; }
+    setBusy(form, true);
+    setMsg('msg-new', 'info', 'Salvataggio…');
+    call('apiAdd', res.data).then(function (out) {
+      state.dbFresh = false; state.chartsFresh = false;
+      resetNewForm();
+      var text = 'OK – salvato: ' + res.data.desc + ', ' + formatAmount(Number(res.data.amount)) + ' €';
+      setMsg('msg-new', out.warning ? 'ko' : 'ok', out.warning ? text + '. Attenzione: ' + out.warning : text);
+    }).catch(function (err) {
+      // In caso di errore i campi restano compilati, così non va riscritto tutto.
+      setMsg('msg-new', 'ko', 'KO – ' + err.message);
+    }).then(function () { setBusy(form, false); });
+  }
+
+  /* ---------- DB ---------- */
+  function formatAmount(n) {
+    return n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function formatDate(iso) {
+    return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(2, 4) : 'senza data';
+  }
+
+  function loadDb() {
+    setMsg('msg-db', 'info', 'Caricamento…');
+    $('reload-db').disabled = true;
+    return call('apiList').then(function (rows) {
+      rows.sort(function (a, b) { return (b.date || '').localeCompare(a.date || '') || b.row - a.row; });
+      state.rows = rows; state.dbFresh = true; state.shown = PAGE;
+      setMsg('msg-db', '', '');
+      renderDb();
+    }).catch(function (err) {
+      setMsg('msg-db', 'ko', 'KO – ' + err.message);
+    }).then(function () { $('reload-db').disabled = false; });
+  }
+
+  function renderDb() {
+    var q = $('search').value.trim().toLowerCase();
+    var rows = q ? state.rows.filter(function (r) {
+      return (r.desc + ' ' + r.cat).toLowerCase().indexOf(q) >= 0;
+    }) : state.rows;
+    var list = $('list');
+    list.textContent = '';
+    rows.slice(0, state.shown).forEach(function (r) {
+      var li = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'item';
+      var d = document.createElement('span'); d.className = 'd'; d.textContent = r.desc || '(senza descrizione)';
+      var a = document.createElement('span');
+      var income = state.income[r.cat] === true;
+      a.className = 'a ' + (income ? 'in' : 'out');
+      a.textContent = r.amount === null
+        ? '⚠ ' + (r.amountRaw || 'vuoto')
+        : (income ? '+' : '−') + formatAmount(r.amount) + ' €';
+      var m = document.createElement('span'); m.className = 'm';
+      m.textContent = formatDate(r.date) + ' · ' + (r.cat || 'senza categoria') + (r.imp ? ' · ★ importante' : '');
+      b.appendChild(d); b.appendChild(a); b.appendChild(m);
+      b.addEventListener('click', function () { openEdit(r); });
+      li.appendChild(b); list.appendChild(li);
+    });
+    $('count').textContent = !state.dbFresh ? '' :
+      rows.length === 0 ? (q ? 'Nessun movimento trovato.' : 'Nessun movimento registrato.') :
+      rows.length + (rows.length === 1 ? ' movimento' : ' movimenti');
+    $('more').hidden = rows.length <= state.shown;
+  }
+
+  /* ---------- Modifica / eliminazione ---------- */
+  function openEdit(r) {
+    state.editing = r;
+    $('e-desc').value = r.desc;
+    $('e-cat').value = r.cat;
+    $('e-amount').value = r.amount === null ? '' : r.amount.toFixed(2).replace('.', ',');
+    $('e-date').value = r.date;
+    $('e-imp').checked = r.imp;
+    disarmDelete();
+    setMsg('msg-edit', r.amount === null ? 'ko' : '',
+      r.amount === null ? 'Nel foglio l\'importo è "' + r.amountRaw + '" (non numerico): correggilo e salva.' : '');
+    $('edit').showModal();
+  }
+  function closeEdit() { state.editing = null; $('edit').close(); }
+  function setEditBusy(busy) {
+    setBusy($('form-edit'), busy);
+    $('edit-delete').disabled = busy; $('edit-cancel').disabled = busy;
+  }
+  function afterChange(text) {
+    state.chartsFresh = false;
+    closeEdit();
+    loadDb().then(function () { if (state.dbFresh) setMsg('msg-db', 'ok', text); });
+  }
+
+  function onSubmitEdit(ev) {
+    ev.preventDefault();
+    var r = state.editing;
+    var res = readForm('e-');
+    if (res.error) { setMsg('msg-edit', 'ko', 'KO – ' + res.error); $('e-' + res.focus).focus(); return; }
+    setEditBusy(true);
+    setMsg('msg-edit', 'info', 'Salvataggio…');
+    call('apiUpdate', r.row, r.sig, res.data).then(function () {
+      setEditBusy(false);
+      afterChange('OK – movimento aggiornato.');
+    }).catch(function (err) {
+      setEditBusy(false);
+      setMsg('msg-edit', 'ko', 'KO – ' + err.message);
+    });
+  }
+
+  // L'eliminazione richiede due tocchi invece di un confirm() del browser.
+  function disarmDelete() {
+    var b = $('edit-delete');
+    b.classList.remove('armed'); b.textContent = 'Elimina';
+  }
+  function onDelete() {
+    var b = $('edit-delete');
+    if (!b.classList.contains('armed')) {
+      b.classList.add('armed'); b.textContent = 'Conferma eliminazione';
+      return;
+    }
+    var r = state.editing;
+    setEditBusy(true);
+    setMsg('msg-edit', 'info', 'Eliminazione…');
+    call('apiDelete', r.row, r.sig).then(function () {
+      setEditBusy(false);
+      afterChange('OK – movimento eliminato.');
+    }).catch(function (err) {
+      setEditBusy(false); disarmDelete();
+      setMsg('msg-edit', 'ko', 'KO – ' + err.message);
+    });
+  }
+
+  /* ---------- Charts ---------- */
+  function loadCharts() {
+    setMsg('msg-charts', 'info', 'Caricamento…');
+    $('reload-charts').disabled = true;
+    return call('apiCharts').then(function (out) {
+      state.chartsFresh = true;
+      setMsg('msg-charts', '', '');
+      renderCharts(out);
+    }).catch(function (err) {
+      setMsg('msg-charts', 'ko', 'KO – ' + err.message);
+    }).then(function () { $('reload-charts').disabled = false; });
+  }
+
+  function renderCharts(out) {
+    var box = $('charts');
+    box.textContent = '';
+    var failed = 0;
+    out.charts.forEach(function (src, i) {
+      if (!src) { failed++; return; }
+      var img = document.createElement('img');
+      img.src = src; img.alt = 'Grafico ' + (i + 1) + ' del foglio Charts';
+      box.appendChild(img);
+    });
+    if (failed) setMsg('msg-charts', 'ko', failed + ' grafico/i non esportabile/i: apri il foglio originale per vederlo.');
+
+    var sheet = $('sheet');
+    sheet.textContent = '';
+    var t = out.table;
+    sheet.hidden = !t.values.length;
+    $('zoombar').hidden = !t.values.length;
+    if (!t.values.length) return;
+    var table = document.createElement('table');
+    t.values.forEach(function (row, i) {
+      var tr = document.createElement('tr');
+      row.forEach(function (v, j) {
+        var td = document.createElement('td');
+        td.textContent = v;
+        var cls = [];
+        if (v && !/^[-−+]?[\d.,\s]+[%€]?$/.test(v)) cls.push('t');   // testo a sinistra, numeri a destra
+        if (t.bold[i][j]) cls.push('b');
+        if (cls.length) td.className = cls.join(' ');
+        var bg = t.backgrounds[i][j];
+        if (bg && bg.toLowerCase() !== '#ffffff') td.style.background = bg;
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    });
+    sheet.appendChild(table);
+    fitSheet();
+  }
+
+  /* ---------- Zoom della tabella pivot ---------- */
+  // Parte "adattata" (tutta la tabella visibile in larghezza); ingrandendo oltre,
+  // il contenitore mostra le barre di scorrimento. Non si scende sotto l'adattamento.
+  var zoom = { fit: 1, cur: 1, max: 2.5, pending: false, pinch: null };
+
+  function fitSheet() {
+    var sheet = $('sheet'), table = sheet.querySelector('table');
+    if (!table) return;
+    if (!sheet.clientWidth) { zoom.pending = true; return; }   // scheda non visibile: rimando
+    zoom.pending = false;
+    table.style.zoom = 1;
+    // 0.995: margine contro gli arrotondamenti che farebbero comparire la barra orizzontale.
+    zoom.fit = Math.min(1, sheet.clientWidth / table.offsetWidth * 0.995);
+    // I bordi delle celle non scendono sotto 1 pixel fisico, quindi la tabella rimpicciolita
+    // risulta un po' più larga del previsto: correggo misurando la larghezza reale.
+    for (var i = 0; i < 3 && zoom.fit < 1; i++) {
+      table.style.zoom = zoom.fit;
+      if (sheet.scrollWidth <= sheet.clientWidth) break;
+      zoom.fit *= sheet.clientWidth / sheet.scrollWidth * 0.995;
+    }
+    zoom.cur = 1;
+    sheet.style.maxHeight = 'none';
+    setZoom(zoom.fit, 0, 0);
+    sheet.scrollLeft = 0; sheet.scrollTop = 0;
+  }
+
+  /** Imposta lo zoom mantenendo fermo il punto (px, py) del contenitore. */
+  function setZoom(value, px, py) {
+    var sheet = $('sheet'), table = sheet.querySelector('table');
+    if (!table) return;
+    var next = Math.max(zoom.fit, Math.min(zoom.max, value));
+    var contentX = (sheet.scrollLeft + px) / zoom.cur;
+    var contentY = (sheet.scrollTop + py) / zoom.cur;
+    table.style.zoom = next;
+    zoom.cur = next;
+    // Adattata: altezza libera (nessuna barra). Ingrandita: riquadro con scorrimento.
+    sheet.style.maxHeight = next > zoom.fit + 0.001 ? '75vh' : 'none';
+    sheet.scrollLeft = contentX * next - px;
+    sheet.scrollTop = contentY * next - py;
+    $('zoom-out').disabled = next <= zoom.fit + 0.001;
+    $('zoom-in').disabled = next >= zoom.max - 0.001;
+    $('zoom-fit').disabled = next <= zoom.fit + 0.001;
+  }
+
+  function zoomStep(factor) {
+    var sheet = $('sheet');
+    setZoom(zoom.cur * factor, sheet.clientWidth / 2, Math.min(sheet.clientHeight, window.innerHeight) / 2);
+  }
+
+  function touchGap(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+
+  function initZoom() {
+    var sheet = $('sheet');
+    $('zoom-in').addEventListener('click', function () { zoomStep(1.3); });
+    $('zoom-out').addEventListener('click', function () { zoomStep(1 / 1.3); });
+    $('zoom-fit').addEventListener('click', fitSheet);
+    sheet.addEventListener('touchstart', function (ev) {
+      zoom.pinch = ev.touches.length === 2 ? { gap: touchGap(ev.touches), start: zoom.cur } : null;
+    }, { passive: true });
+    sheet.addEventListener('touchmove', function (ev) {
+      if (!zoom.pinch || ev.touches.length !== 2) return;
+      ev.preventDefault();
+      var box = sheet.getBoundingClientRect();
+      var cx = (ev.touches[0].clientX + ev.touches[1].clientX) / 2 - box.left;
+      var cy = (ev.touches[0].clientY + ev.touches[1].clientY) / 2 - box.top;
+      setZoom(zoom.pinch.start * touchGap(ev.touches) / zoom.pinch.gap, cx, cy);
+    }, { passive: false });
+    sheet.addEventListener('touchend', function (ev) { if (ev.touches.length < 2) zoom.pinch = null; });
+    // Rotazione dello schermo: se la tabella era adattata, la riadatto alla nuova larghezza.
+    window.addEventListener('resize', function () {
+      if (zoom.cur <= zoom.fit + 0.001) fitSheet();
+    });
+  }
+
+  /* ---------- Navigazione ---------- */
+  function showLock(text) {
+    ['new', 'db', 'charts'].forEach(function (v) { $('view-' + v).hidden = true; });
+    if ($('edit').open) $('edit').close();
+    document.querySelector('nav').hidden = true;
+    $('view-lock').hidden = false;
+    setMsg('msg-lock', text ? 'ko' : '', text ? 'KO – ' + text : '');
+  }
+
+  function show(view) {
+    $('view-lock').hidden = true;
+    document.querySelector('nav').hidden = false;
+    ['new', 'db', 'charts'].forEach(function (v) { $('view-' + v).hidden = v !== view; });
+    Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (b) {
+      b.setAttribute('aria-selected', String(b.dataset.view === view));
+    });
+    window.scrollTo(0, 0);
+    if (view === 'db' && !state.dbFresh) loadDb();
+    if (view === 'charts' && !state.chartsFresh) loadCharts();
+    if (view === 'charts' && zoom.pending) fitSheet();
+  }
+
+  /* ---------- Avvio ---------- */
+  function start(init) {
+    saveCode(state.code);
+    state.dbFresh = false; state.chartsFresh = false;
+    if (state.started) { show('new'); return; }   // rientro dopo un nuovo inserimento del codice
+    state.started = true;
+    state.groups = init.groups; state.today = init.today;
+    init.groups.forEach(function (g) {
+      var income = /entrat/i.test(g.label);
+      g.items.forEach(function (name) { state.income[name] = income; });
+    });
+    $('open-sheet').href = init.sheetUrl;
+
+    buildForm($('form-new'), 'n-', 'Salva');
+    buildForm($('form-edit'), 'e-', 'Salva modifiche');
+    resetNewForm();
+
+    $('form-new').addEventListener('submit', onSubmitNew);
+    $('form-edit').addEventListener('submit', onSubmitEdit);
+    $('edit-delete').addEventListener('click', onDelete);
+    $('edit-cancel').addEventListener('click', closeEdit);
+    $('edit').addEventListener('close', function () { state.editing = null; });
+    $('search').addEventListener('input', function () { state.shown = PAGE; renderDb(); });
+    $('more').addEventListener('click', function () { state.shown += PAGE; renderDb(); });
+    $('reload-db').addEventListener('click', loadDb);
+    $('reload-charts').addEventListener('click', loadCharts);
+    initZoom();
+    Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (b) {
+      b.addEventListener('click', function () { show(b.dataset.view); });
+    });
+    setMsg('msg-new', '', '');
+    show('new');
+  }
+
+  function boot() {
+    setMsg('msg-new', 'info', 'Caricamento…');
+    return call('apiInit').then(start);
+  }
+
+  $('form-lock').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var value = $('lock-code').value.trim();
+    if (!value) { setMsg('msg-lock', 'ko', 'KO – Inserisci il codice di accesso.'); return; }
+    state.code = value;
+    setBusy(this, true);
+    setMsg('msg-lock', 'info', 'Verifica…');
+    var form = this;
+    boot().then(function () { $('lock-code').value = ''; setMsg('msg-lock', '', ''); })
+      .catch(function (err) { setMsg('msg-lock', 'ko', 'KO – ' + err.message); })
+      .then(function () { setBusy(form, false); });
+  });
+
+  state.code = loadCode();
+  if (!state.code) {
+    showLock('');
+  } else {
+    boot().catch(function (err) {
+      if (state.code) setMsg('msg-new', 'ko', 'KO – impossibile avviare l\'app: ' + err.message);
+    });
+  }
+})();
+</script>
+</body>
+</html>
